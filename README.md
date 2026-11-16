@@ -38,6 +38,17 @@ python -m pytest tests
 
 ## 手工补充历史
 
+### 用 Wind VBA 接口回填（API 积分不足时）
+
+走 Wind 终端的 VBA 接口（vba_edb / vba_wsd），不消耗 Alice Market 积分。
+
+1. 登录 Wind 终端；新建空白 Excel 工作簿，Alt+F11 打开 VBA 编辑器。
+2. 「工具 → 引用」勾选 `WindVBA`（找不到就浏览 `C:\Wind\Wind.NET.Client\WindNET\DataBrowse\XLA\WindVBA.xla`）。
+3. 「文件 → 导入文件」选 `tools/WindBackfill.bas`，按 F5 运行 `RunBackfill`。每个序列写到同名工作表（A 列日期、B 列数值），`log` 表记录行数和错误。
+4. 另存为 .xlsx，`python -m thermometer.import_excel 文件.xlsx` 写入 `data/manual/`，再 `python -m thermometer rebuild`。
+
+### 直接放 CSV
+
 当 Wind 历史受权限或长度限制时，可以从 Wind 终端导出数据，放到 `data/manual/<序列名>.csv`。文件两列：`date,value`。与 Wind 返回的数据重叠时，以 Wind 为准。
 
 可用的序列名：`y10 omo7d mtn_aaa3 mtn_aap3 cdb3 gov3 pe dy fund_close cb_premium`
