@@ -2,9 +2,12 @@ name: 每日温度计
 
 on:
   schedule:
-    # GitHub cron 使用 UTC：10:00 UTC = 北京时间 18:00，周一至周五
-    # 注意：GitHub 定时任务高峰期可能延迟数分钟到数十分钟
-    - cron: "0 10 * * 1-5"
+    # GitHub cron 使用 UTC。北京时间周二至周六 00:05 跑，取前一交易日（周一至周五）收盘数据。
+    # 选在 00:40 左右万得每日赠送积分过期之前。00:20 再触发一次补跑：
+    # 若 00:05 那次已成功提交，补跑会直接跳过，不消耗积分。
+    # 注意：GitHub 定时任务高峰期可能延迟数分钟到数十分钟。
+    - cron: "5 16 * * 1-5"
+    - cron: "20 16 * * 1-5"
   workflow_dispatch:
     inputs:
       mode:
@@ -28,19 +31,33 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: 补跑去重
+        id: guard
+        if: github.event_name == 'schedule'
+        run: |
+          # 最新一次提交若是 40 分钟内的机器人更新，说明本轮已成功，补跑跳过
+          if [ -n "$(git log -1 --since='40 minutes ago' --author=thermometer-bot --format=%H)" ]; then
+            echo "本轮已更新，跳过补跑"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: actions/setup-node@v4
+        if: steps.guard.outputs.skip != 'true'
         with:
           node-version: "22"
 
       - uses: actions/setup-python@v5
+        if: steps.guard.outputs.skip != 'true'
         with:
           python-version: "3.12"
           cache: pip
 
       - name: 安装 Python 依赖
+        if: steps.guard.outputs.skip != 'true'
         run: pip install -r requirements.txt
 
       - name: 安装万得 MCP Skill
+        if: steps.guard.outputs.skip != 'true'
         run: |
           npx --yes --registry=https://registry.npmjs.org skills add https://github.com/Wind-Alice/AliceMarket.git \
             --skill wind-mcp-skill -g -y \
@@ -49,23 +66,26 @@ jobs:
           test -f ~/.agents/skills/wind-mcp-skill/scripts/cli.mjs
 
       - name: 计算温度
+        if: steps.guard.outputs.skip != 'true'
         env:
           WIND_API_KEY: ${{ secrets.WIND_API_KEY }}
+          MODE: ${{ github.event.inputs.mode || 'daily' }}
+          START: ${{ github.event.inputs.start || '2021-11-01' }}
         run: |
           if [ -z "$WIND_API_KEY" ]; then echo "::error::仓库未配置 WIND_API_KEY secret"; exit 1; fi
-          MODE="${{ github.event.inputs.mode || 'daily' }}"
           if [ "$MODE" = "backfill" ]; then
-            python -m thermometer backfill "${{ github.event.inputs.start }}"
+            python -m thermometer backfill "$START"
           else
             python -m thermometer "$MODE"
           fi
 
       - name: 提交当日记录
-        if: always()
+        if: always() && steps.guard.outputs.skip != 'true'
         run: |
           git config user.name  "thermometer-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data docs
+          # 取数失败时 docs/ 可能不存在，只添加实际存在的目录
+          for p in data docs; do [ -e "$p" ] && git add "$p"; done
           if git diff --cached --quiet; then
             echo "无新数据（非交易日或取数失败），不提交"
           else
