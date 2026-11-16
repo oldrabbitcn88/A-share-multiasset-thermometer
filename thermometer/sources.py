@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import os
 import re
 
 import pandas as pd
@@ -48,10 +49,10 @@ def _series(body: dict, keywords: tuple[str, ...], fallback_date: pd.Timestamp) 
     raise wind.WindError("NO_FIELD", f"返回中没有含 {keywords} 的数值列")
 
 
-def _chunks(start: str, end: str, years: int = 1):
+def _chunks(start: str, end: str, months: int = 12):
     s, e = pd.Timestamp(start), pd.Timestamp(end)
     while s <= e:
-        nxt = min(s + pd.DateOffset(years=years) - pd.Timedelta(days=1), e)
+        nxt = min(s + pd.DateOffset(months=months) - pd.Timedelta(days=1), e)
         yield s.strftime("%Y-%m-%d"), nxt.strftime("%Y-%m-%d")
         s = nxt + pd.Timedelta(days=1)
 
@@ -72,10 +73,10 @@ def edb(codes: dict[str, str], start: str, end: str) -> dict[str, pd.Series]:
     return {name: by_code[c] for name, c in codes.items() if c in by_code}
 
 
-def index_fundamental(code: str, field: str, start: str, end: str) -> pd.Series:
+def index_fundamental(code: str, field: str, keyword: str, start: str, end: str) -> pd.Series:
     body = wind.call("index_data", "get_index_fundamentals",
                      {"question": f"查询{code}指数{_span(start, end)}每日的{field}"})
-    return _series(body, (field,), pd.Timestamp(end))
+    return _series(body, (keyword,), pd.Timestamp(end))
 
 
 def index_close(code: str, start: str, end: str) -> pd.Series:
@@ -97,21 +98,24 @@ def cb_medians(start: str, end: str) -> dict[str, pd.Series]:
 
 def fetch_all(cfg: dict, start: str, end: str, backfill: bool) -> tuple[dict[str, pd.Series], list[str]]:
     """抓取全部原始序列；单个源失败不影响其它源。遇额度/认证错误立即停止。
-    回填按年分段请求，避免单次返回被截断。"""
+    回填分段请求，避免单次返回被截断。"""
     w = cfg["wind"]
     fund_start = str((pd.Timestamp(start) - pd.DateOffset(years=cfg["model"]["fund_lookback_years"])).date()) \
         if backfill else start
     jobs = [
-        ("EDB利率", start, lambda a, b: edb({k: w[k] for k in ("y10", "omo7d", "mtn_aaa3", "mtn_aap3", "cdb3", "gov3")}, a, b)),
-        ("PE", start, lambda a, b: {"pe": index_fundamental(w["equity_index"], "市盈率TTM", a, b)}),
-        ("股息率", start, lambda a, b: {"dy": index_fundamental(w["dividend_index"], "股息率", a, b)}),
-        ("偏债混基", fund_start, lambda a, b: {"fund_close": index_close(w["fund_index"], a, b)}),
-        ("转债溢价率", start, cb_medians),
+        # (名称, 起始日, 回填分段月数, 取数函数)。自然语言/分析接口单次约返回 100 行，按 4 个月分段
+        ("EDB利率", start, 12, lambda a, b: edb({k: w[k] for k in ("y10", "omo7d", "mtn_aaa3", "mtn_aap3", "cdb3", "gov3")}, a, b)),
+        ("PE", start, 4, lambda a, b: {"pe": index_fundamental(w["equity_index"], "市盈率TTM", "市盈率", a, b)}),
+        ("股息率", start, 4, lambda a, b: {"dy": index_fundamental(w["dividend_index"], "股息率", "股息率", a, b)}),
+        ("偏债混基", fund_start, 12, lambda a, b: {"fund_close": index_close(w["fund_index"], a, b)}),
+        ("转债溢价率", start, 4, cb_medians),
     ]
+    if only := os.environ.get("THERMO_ONLY"):  # 只重抓部分源，如 THERMO_ONLY=PE,股息率
+        jobs = [j for j in jobs if j[0] in only.split(",")]
     acc: dict[str, list[pd.Series]] = {}
     errors: list[str] = []
-    for name, s0, job in jobs:
-        for a, b in (_chunks(s0, end) if backfill else [(s0, end)]):
+    for name, s0, months, job in jobs:
+        for a, b in (_chunks(s0, end, months) if backfill else [(s0, end)]):
             try:
                 for k, s in job(a, b).items():
                     acc.setdefault(k, []).append(s)

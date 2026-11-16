@@ -90,7 +90,7 @@ def main(argv: list[str]) -> int:
     data_date = latest.index[0].strftime("%Y-%m-%d")
     # 追加式日志：同一数据日期只记一次，用于保留"当日所见"的温度（后续历史修订不改写）
     log = pd.read_csv(LOG) if LOG.exists() else pd.DataFrame()
-    if cmd != "rebuild" and (log.empty or data_date not in set(log["data_date"])):
+    if cmd == "daily" and (log.empty or data_date not in set(log["data_date"])):
         rec = {"run_date": str(today), "data_date": data_date,
                **{k: round(float(row[k]), 2) for k in ("composite", "stock", "bond", "cb", "mr", "stock_minus_bond")},
                "regime": row["regime"], "n_factors": int(row["n_factors"]), "errors": " | ".join(errors)}
