@@ -38,11 +38,14 @@ python -m pytest tests
 
 ## 手工补充历史
 
-### 用 Wind Excel 插件回填（API 积分不足时）
+### 用 Wind VBA 接口回填（API 积分不足时）
 
-1. `python tools/make_wind_excel.py wind_backfill.xlsx 2021-11-01 2026-11-16` 生成取数表（每个序列一个工作表，内含 EDB/WSD 公式）。
-2. 在装有 Wind 插件的 Excel 中打开、登录并刷新，保存。
-3. `python -m thermometer.import_excel wind_backfill.xlsx` 写入 `data/manual/<序列名>.csv`，再 `python -m thermometer rebuild` 重算（不联网）。
+走 Wind 终端的 VBA 接口（vba_edb / vba_wsd），不消耗 Alice Market 积分。
+
+1. 登录 Wind 终端；新建空白 Excel 工作簿，Alt+F11 打开 VBA 编辑器。
+2. 「工具 → 引用」勾选 `WindVBA`（找不到就浏览 `C:\Wind\Wind.NET.Client\WindNET\DataBrowse\XLA\WindVBA.xla`）。
+3. 「文件 → 导入文件」选 `tools/WindBackfill.bas`，按 F5 运行 `RunBackfill`。每个序列写到同名工作表（A 列日期、B 列数值），`log` 表记录行数和错误。
+4. 另存为 .xlsx，`python -m thermometer.import_excel 文件.xlsx` 写入 `data/manual/`，再 `python -m thermometer rebuild`。
 
 ### 直接放 CSV
 

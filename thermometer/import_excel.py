@@ -14,7 +14,7 @@ import pandas as pd
 from openpyxl import load_workbook
 
 MANUAL = Path(__file__).resolve().parent.parent / "data" / "manual"
-SKIP = {"说明"}
+SKIP = {"说明", "log"}
 
 
 def _date(v):
