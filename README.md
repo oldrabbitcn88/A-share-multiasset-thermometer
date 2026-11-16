@@ -38,6 +38,14 @@ python -m pytest tests
 
 ## 手工补充历史
 
+### 用 Wind Excel 插件回填（API 积分不足时）
+
+1. `python tools/make_wind_excel.py wind_backfill.xlsx 2021-11-01 2026-11-16` 生成取数表（每个序列一个工作表，内含 EDB/WSD 公式）。
+2. 在装有 Wind 插件的 Excel 中打开、登录并刷新，保存。
+3. `python -m thermometer.import_excel wind_backfill.xlsx` 写入 `data/manual/<序列名>.csv`，再 `python -m thermometer rebuild` 重算（不联网）。
+
+### 直接放 CSV
+
 当 Wind 历史受权限或长度限制时，可以从 Wind 终端导出数据，放到 `data/manual/<序列名>.csv`。文件两列：`date,value`。与 Wind 返回的数据重叠时，以 Wind 为准。
 
 可用的序列名：`y10 omo7d mtn_aaa3 mtn_aap3 cdb3 gov3 pe dy fund_close cb_premium`
