@@ -25,9 +25,28 @@ def regime(t: float) -> str:
     return next(label for hi, label in REGIMES if t < hi)
 
 
+def parity_adjusted_premium(prem: pd.Series, parity: pd.Series) -> pd.Series:
+    """把全市场溢价率中位数修正到"平价=100"口径。
+
+    股市下跌时转债平价下移、溢价率被动抬升，原始中位数会误显示"贵"。
+    用历史样本回归 溢价率中位数 ~ a + b·ln(平价中位数)，再按 b 把当日值平移到 ln(100)。
+    无平价数据或样本不足时返回原值。
+    """
+    ok = prem.notna() & parity.notna() & (parity > 0)
+    if ok.sum() < 60:
+        return prem
+    x, y = np.log(parity[ok]), prem[ok]
+    b = np.polyfit(x, y, 1)[0]
+    return (prem - b * (np.log(parity) - np.log(100))).where(ok, prem)
+
+
 def build_factors(raw: pd.DataFrame, cfg: dict) -> pd.DataFrame:
     """raw 列：y10, omo7d, mtn_aaa3, mtn_aap3, cdb3, gov3, pe, dy, fund_close, cb_premium（单位：%/倍/点）"""
     r = raw.sort_index().ffill(limit=5)  # 节假日错位最多前向填充 5 天
+    if "omo7d" in raw:  # 政策利率为阶梯序列，只在操作日有记录，无限期沿用
+        r["omo7d"] = raw["omo7d"].sort_index().ffill()
+    if "y10" in raw:  # 以 10Y 国债有值的日期为交易日历，剔除接口在非交易日/盘前返回的占位行
+        r = r[raw["y10"].sort_index().notna()]
     col = lambda c: r[c] if c in r else pd.Series(np.nan, index=r.index)
     f = pd.DataFrame(index=r.index)
     f["erp"] = 100.0 / col("pe").where(col("pe") > 0) - col("y10")
@@ -37,7 +56,7 @@ def build_factors(raw: pd.DataFrame, cfg: dict) -> pd.DataFrame:
     base = col("cdb3") if col("cdb3").notna().any() else col("gov3")
     f["credit"] = (col("mtn_aaa3") - base) * 100  # bp
     f["grade"] = (col("mtn_aap3") - col("mtn_aaa3")) * 100
-    f["cb_premium"] = col("cb_premium")
+    f["cb_premium"] = parity_adjusted_premium(col("cb_premium"), col("cb_parity"))
     close = col("fund_close").dropna()
     yrs = cfg["model"]["fund_lookback_years"]
     if len(close):

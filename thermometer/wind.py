@@ -49,8 +49,15 @@ def call(server: str, tool: str, params: dict, timeout: int = 180) -> dict:
     return body
 
 
-def table(body: dict) -> tuple[list[str], list[list]]:
-    """解析 {data:{columns:[{name}], rows:[[...]]}} 形态的表格返回。"""
+def tables(body: dict) -> list[tuple[list[dict], list[list]]]:
+    """解析表格返回，兼容两种实测形态：
+    行情/K线：{data:{columns:[{name,type}], rows:[...]}}
+    自然语言/分析：{data:{data:[{columns, rows}, ...]}}（可能多张表）
+    """
     data = body.get("data", body)
-    cols = [c["name"] if isinstance(c, dict) else c for c in data.get("columns", [])]
-    return cols, data.get("rows", [])
+    blocks = data.get("data") if isinstance(data.get("data"), list) else [data]
+    out = []
+    for b in blocks:
+        cols = [c if isinstance(c, dict) else {"name": c} for c in b.get("columns", [])]
+        out.append((cols, b.get("rows", [])))
+    return out
