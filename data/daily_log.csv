@@ -1,0 +1,2 @@
+run_date,data_date,composite,stock,bond,cb,mr,stock_minus_bond,regime,n_factors,errors
+2026-11-17,2025-10-31,86.68,,86.68,,,,过热,4,EDB利率 2025-11-01~2026-10-31: backend_error: 原因：账户积分余额不足，无法完成当前操作。建议：先完成充值并确认余额恢复后，再重新发起请求；官网充值地址：https://market.windalice.com/#/user/credits。 | 账号额度不足或认证失败，停止后续请求
