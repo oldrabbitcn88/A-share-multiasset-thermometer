@@ -51,11 +51,12 @@ jobs:
       - name: 计算温度
         env:
           WIND_API_KEY: ${{ secrets.WIND_API_KEY }}
+          MODE: ${{ github.event.inputs.mode || 'daily' }}
+          START: ${{ github.event.inputs.start || '2021-11-01' }}
         run: |
           if [ -z "$WIND_API_KEY" ]; then echo "::error::仓库未配置 WIND_API_KEY secret"; exit 1; fi
-          MODE="${{ github.event.inputs.mode || 'daily' }}"
           if [ "$MODE" = "backfill" ]; then
-            python -m thermometer backfill "${{ github.event.inputs.start }}"
+            python -m thermometer backfill "$START"
           else
             python -m thermometer "$MODE"
           fi
@@ -65,7 +66,8 @@ jobs:
         run: |
           git config user.name  "thermometer-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data docs
+          # 取数失败时 docs/ 可能不存在，只添加实际存在的目录
+          for p in data docs; do [ -e "$p" ] && git add "$p"; done
           if git diff --cached --quiet; then
             echo "无新数据（非交易日或取数失败），不提交"
           else
