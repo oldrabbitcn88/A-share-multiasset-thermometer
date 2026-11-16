@@ -5,13 +5,18 @@
 import sys
 
 from openpyxl import Workbook
+from openpyxl.worksheet.formula import ArrayFormula
 from openpyxl.styles import Font, PatternFill
 
 out = sys.argv[1]
 start = sys.argv[2] if len(sys.argv) > 2 else "2021-11-01"
 end = sys.argv[3] if len(sys.argv) > 3 else "2026-11-16"
 
-S, E = "说明!$B$3", "说明!$B$4"
+# 日期直接写进公式（不跨表引用），避免插件把引用单元格当成非法参数
+S, E = f'"{start}"', f'"{end}"'
+# 以传统数组公式（等同 Ctrl+Shift+Enter）写入一块区域：
+# openpyxl 写出的普通公式在新版 Excel 中会被加上隐式交集 @，数组结果被截断成 #VALUE!
+SPILL = "A3:B2200"
 # 序列名, 中文说明, 公式, 备注
 SERIES = [
     ("y10", "中国:国债到期收益率:10年（中国货币网）", f'=EDB("M0048271",{S},{E},"Fill=Previous")', "%"),
@@ -39,7 +44,7 @@ rows = [
     ["用法"],
     ["1. 在装有 Wind 插件的 Excel 里打开本文件，登录 Wind，等各工作表公式刷新出数据（可点 Wind 插件的「刷新」）。"],
     ["2. 每个工作表的 A3 是公式，结果需要有两列：日期、数值。若只出了数值没有日期，请在 Wind 函数向导里勾选「显示日期」后重新插入。"],
-    ["3. 改起止日期只需改本页 B3/B4。改完全部刷新后保存为 .xlsx，把文件发回项目即可，我来导入仓库。"],
+    ["3. 起止日期已写进各表公式（与本页 B3/B4 一致，改日期请让我重新生成）。刷新后保存为 .xlsx，把文件发回项目即可，我来导入仓库。"],
     ["4. cb_premium / cb_parity 是全市场存续转债的转股溢价率、转换价值的每日中位数。若 Wind 有现成的全市场序列（如 EDB 里搜「转股溢价率 中位数」），把公式或导出数据放到对应工作表 A3 起（日期、数值两列）；找不到可留空，程序沿用 API 已取到的 2022-04 起数据。"],
     ["5. 与 API 已有数据重叠的日期以 API 为准，Excel 数据只用于补缺。"],
     [],
@@ -61,7 +66,10 @@ for name, desc, formula, note in SERIES:
     s["A1"].font = bold
     s["A2"], s["B2"] = "日期", "数值"
     if formula:
-        s["A3"] = formula
+        s["A3"] = ArrayFormula(SPILL, formula)
+        s["D1"] = "公式文本（若 A3 仍报错，可复制到 A3 手工输入，或用 Wind 函数向导重插）："
+        s["D2"] = formula
+        s["D2"].data_type = "s"  # 以文本保存，便于复制
     s.column_dimensions["A"].width = 14
     s.column_dimensions["B"].width = 14
 wb.save(out)
