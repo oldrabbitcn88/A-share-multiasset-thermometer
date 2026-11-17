@@ -53,6 +53,33 @@ python -m pytest tests
 
 可用的序列名：`y10 omo7d mtn_aaa3 mtn_aap3 cdb3 gov3 pe dy fund_close cb_premium`
 
+## 微信小程序数据
+
+小程序不直连 GitHub（`raw.githubusercontent.com` 无法加入 request 合法域名），改为读 COS 上的 `thermo/data.json`。
+
+每日 `daily` 流程算完温度后，`tools/publish_thermo.py` 会把 `data/temperature.csv` 转成精简结构（约 203 KB，含自 2016 年起的 2709 期历史）并 `put_object` 上传：
+
+```
+https://thermometer-1455136845.cos.ap-shanghai.myqcloud.com/thermo/data.json
+```
+
+需要四项仓库 secret（Settings → Secrets and variables → Actions）：
+
+| Secret | 值 |
+|---|---|
+| `COS_BUCKET` | `thermometer-1455136845` |
+| `COS_REGION` | `ap-shanghai` |
+| `COS_SECRET_ID` | CAM 子用户的 SecretId |
+| `COS_SECRET_KEY` | CAM 子用户的 SecretKey |
+
+未配置时该步骤打一条 warning 并跳过，不影响仓库正常提交。手动重发一次：
+
+```bash
+pip install -r requirements.txt
+COS_BUCKET=... COS_REGION=ap-shanghai COS_SECRET_ID=... COS_SECRET_KEY=... \
+  python tools/publish_thermo.py --upload
+```
+
 ## 已知限制
 
 - 当前账号没有中债收益率曲线的权限，10Y 国债改用中国货币网口径（M0048271）。
