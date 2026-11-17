@@ -17,7 +17,7 @@ on:
         description: "backfill 起始日期 yyyy-mm-dd"
         default: "2021-11-01"
       dedupe:
-        description: "40 分钟内已有机器人更新则跳过（外部定时触发用）"
+        description: "当天已成功取数则跳过（外部定时触发用）"
         default: "false"
 
 permissions:
@@ -38,8 +38,8 @@ jobs:
         id: guard
         if: github.event_name == 'schedule' || github.event.inputs.dedupe == 'true'
         run: |
-          # 最新一次提交若是 40 分钟内的机器人更新，说明本轮已成功，补跑跳过
-          if [ -n "$(git log -1 --since='40 minutes ago' --author=thermometer-bot --format=%H)" ]; then
+          # daily_log 里已有今天（北京时间）且无报错的记录，说明本轮已成功取数，补跑跳过
+          if python3 -c "import csv,datetime,zoneinfo,sys; d=str(datetime.datetime.now(zoneinfo.ZoneInfo('Asia/Shanghai')).date()); sys.exit(0 if any(r['run_date']==d and not r['errors'] for r in csv.DictReader(open('data/daily_log.csv'))) else 1)" 2>/dev/null; then
             echo "本轮已更新，跳过补跑"
             echo "skip=true" >> "$GITHUB_OUTPUT"
           fi
