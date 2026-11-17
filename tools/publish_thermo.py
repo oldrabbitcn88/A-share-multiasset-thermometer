@@ -34,7 +34,7 @@ FACTORS = [
     ("cb_premium", "转股溢价率"),
     ("fund_3y", "偏债混基3年年化"),
 ]
-ASSETS = [("stock", "股票"), ("bond", "纯债"), ("cb", "转债"), ("mr", "均值回归(偏债混基)")]
+ASSETS = [("stock", "权益"), ("bond", "纯债"), ("cb", "转债"), ("mr", "均值回归(偏债混基)")]
 REGIME_ORDER = ["极冷", "偏冷", "中性", "偏热", "过热"]
 
 
@@ -194,7 +194,7 @@ def main():
     payload = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
     lat = data["latest"]
     print(
-        "%s 综合温度=%s %s | 股票=%s 纯债=%s 转债=%s 均值回归=%s | 历史=%d 期 | 包体=%.1f KB"
+        "%s 综合温度=%s %s | 权益=%s 纯债=%s 转债=%s 均值回归=%s | 历史=%d 期 | 包体=%.1f KB"
         % (
             data["updated"],
             lat["composite"],
