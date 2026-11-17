@@ -25,8 +25,8 @@
 1. 把本目录推送到一个 GitHub 仓库（建议私有）。
 2. 在仓库的 Settings → Secrets and variables → Actions 中新建 secret，名称为 `WIND_API_KEY`，值为你的 Alice Market API Key。
 3. 在 Actions 页面手动运行一次 **每日温度计**，mode 填 `backfill`，start 填起始日期（如 `2021-11-01`），完成一次性历史回填。
-4. 之后北京时间周二至周六 00:05 自动运行 `daily`（00:20 补跑兜底，已成功则跳过）。节假日没有新数据，不会产生提交。
-   - 万得每日赠送积分约 00:02 发放、00:40 过期，GitHub 自带定时在午夜常延迟甚至不触发，所以主触发放在外部 cron-job.org：周二至周六 00:08（备份 00:25），POST `https://api.github.com/repos/oldrabbitcn88/A-share-multiasset-thermometer/actions/workflows/daily.yml/dispatches`，请求头带 `Authorization: Bearer <只授权本仓库 Actions 读写的 fine-grained token>`，请求体 `{"ref":"main","inputs":{"mode":"daily","dedupe":"true"}}`，返回 204 即成功。`dedupe=true` 表示 40 分钟内已有机器人更新就跳过。
+4. 之后北京时间周二至周六 00:05 自动运行 `daily`（00:20 补跑兜底，当天已成功则跳过）。节假日没有新数据，不会产生提交。
+   - 万得每日赠送积分约 00:02 发放、00:40 过期，GitHub 自带定时在午夜常延迟甚至不触发，所以主触发放在外部 cron-job.org：周二至周六 00:08（备份 00:25），POST `https://api.github.com/repos/oldrabbitcn88/A-share-multiasset-thermometer/actions/workflows/daily.yml/dispatches`，请求头带 `Authorization: Bearer <只授权本仓库 Actions 读写的 fine-grained token>`，请求体 `{"ref":"main","inputs":{"mode":"daily","dedupe":"true"}}`，返回 204 即成功。`dedupe=true` 表示 `data/daily_log.csv` 已有当天（北京时间）且无报错的记录就跳过。
 
 本地运行：
 
