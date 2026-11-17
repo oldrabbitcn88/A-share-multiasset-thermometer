@@ -116,12 +116,21 @@ def diagnose(client, bucket, region, target_key):
             print("%-28s 拒绝 (%s)" % (label, code))
             checks.append((label, False))
 
+    probe("get_service(列桶)", lambda: client.list_buckets())
     probe("head_bucket", lambda: client.head_bucket(Bucket=bucket))
     probe("list bucket root", lambda: client.list_objects(Bucket=bucket, MaxKeys=5))
     probe("put " + target_key, lambda: client.put_object(Bucket=bucket, Key=target_key, Body=b"{}"))
     probe("put thermo/_perm.txt", lambda: client.put_object(Bucket=bucket, Key="thermo/_perm.txt", Body=b"ok"))
     probe("put _perm-root.txt", lambda: client.put_object(Bucket=bucket, Key="_perm-root.txt", Body=b"ok"))
     print("::endgroup::")
+
+    try:
+        names = [b.get("Name", "") for b in client.list_buckets().get("Buckets", {}).get("Bucket", [])]
+        print("身份可见桶 %d 个: %s" % (len(names), ", ".join(names[:10]) or "无"))
+        if bucket not in names:
+            print("::error::当前密钥看不到桶 %s：密钥与桶不在同一账号，或子用户无 ListBucket 权限" % bucket)
+    except Exception as exc:
+        print("::error::get_service 失败（%s）：密钥无效、被禁用，或子用户没有任何 COS 权限" % exc)
 
     can_root = dict(checks).get("put _perm-root.txt")
     can_thermo = dict(checks).get("put thermo/_perm.txt")
