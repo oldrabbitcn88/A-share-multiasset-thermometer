@@ -101,6 +101,44 @@ def build(text):
     }
 
 
+def diagnose(client, bucket, region, target_key):
+    """AccessDenied 时逐项探测权限边界，判断是桶级、前缀级还是对象级拒绝。"""
+    print("::group::COS 权限探测")
+    checks = []
+
+    def probe(label, fn):
+        try:
+            fn()
+            print("%-28s 允许" % label)
+            checks.append((label, True))
+        except Exception as exc:
+            code = getattr(exc, "get_error_code", lambda: None)() or type(exc).__name__
+            print("%-28s 拒绝 (%s)" % (label, code))
+            checks.append((label, False))
+
+    probe("head_bucket", lambda: client.head_bucket(Bucket=bucket))
+    probe("list bucket root", lambda: client.list_objects(Bucket=bucket, MaxKeys=5))
+    probe("put " + target_key, lambda: client.put_object(Bucket=bucket, Key=target_key, Body=b"{}"))
+    probe("put thermo/_perm.txt", lambda: client.put_object(Bucket=bucket, Key="thermo/_perm.txt", Body=b"ok"))
+    probe("put _perm-root.txt", lambda: client.put_object(Bucket=bucket, Key="_perm-root.txt", Body=b"ok"))
+    print("::endgroup::")
+
+    can_root = dict(checks).get("put _perm-root.txt")
+    can_thermo = dict(checks).get("put thermo/_perm.txt")
+    print("::warning::bucket=%s region=%s target=%s | 根目录可写=%s thermo/可写=%s"
+          % (bucket, region, target_key, can_root, can_thermo))
+    if can_root and not can_thermo:
+        print("::error::策略按对象/前缀授权且不含 thermo/*：把 CAM 策略 resource 改为 "
+              "qcs::cos:%s:uid/<APPID>:%s/*，或把 Key 换到已授权的根路径" % (region, bucket))
+    elif not can_root:
+        print("::error::根目录也不可写：密钥可能属于其他账号、已被禁用，或策略内没有任何 cos:PutObject 权限")
+    for k in ("thermo/_perm.txt", "_perm-root.txt"):
+        try:
+            client.delete_object(Bucket=bucket, Key=k)
+        except Exception:
+            pass
+
+
 def upload(payload, key):
     from qcloud_cos import CosConfig, CosS3Client
 
@@ -128,6 +166,7 @@ def upload(payload, key):
         except Exception as exc:
             print("[第 %d 次] 上传失败: %s" % (attempt, exc), file=sys.stderr)
             if attempt == 3:
+                diagnose(client, bucket, region, key)
                 raise
             time.sleep(5 * attempt)
 
